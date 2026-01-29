@@ -2,31 +2,51 @@
 
 **Multi-agent mock interview transcript analysis with confidence-scored, evidence-backed insights across 10 categories.**
 
-Built with an anti-hallucination protocol and multi-perspective agent architecture to ensure comprehensive, bias-reduced analysis.
+Built on the [Agent Skills](https://agentskills.io) open standard - works with Claude Code, Cursor, Gemini CLI, OpenAI Codex, VS Code, and 20+ other AI coding tools.
+
+[![Agent Skills Compatible](https://img.shields.io/badge/Agent%20Skills-Compatible-blue)](https://agentskills.io)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+## Supported Platforms
+
+This skill follows the [Agent Skills specification](https://agentskills.io/specification) and works with:
+
+| Platform | Status |
+|----------|--------|
+| Claude Code | ✅ |
+| Claude.ai | ✅ |
+| Cursor | ✅ |
+| VS Code (Copilot) | ✅ |
+| Gemini CLI | ✅ |
+| OpenAI Codex | ✅ |
+| Roo Code | ✅ |
+| Goose | ✅ |
+| Amp | ✅ |
+| [See all 26+ tools](https://agentskills.io) | ✅ |
 
 ## Architecture
 
 ```mermaid
 flowchart TB
     subgraph Input
-        T[📄 Transcript File]
+        T[Transcript File]
     end
 
-    subgraph Director["🎯 Director Agent"]
+    subgraph Director["Director Agent"]
         V[Validate & Detect Type]
         S[Synthesize Results]
     end
 
-    subgraph Analysts["🔍 Parallel Analyst Agents"]
-        A1[💪 Strengths Agent]
-        A2[⚠️ Mistakes Agent]
-        A3[👔 Behavioral Agent]
-        A4[✓ Factual Agent]
+    subgraph Analysts["Parallel Analyst Agents"]
+        A1[Strengths Agent]
+        A2[Mistakes Agent]
+        A3[Behavioral Agent]
+        A4[Factual Agent]
     end
 
     subgraph Output
-        R[📊 Unified Report]
-        J[📋 JSON Summary]
+        R[Unified Report]
+        J[JSON Summary]
     end
 
     T --> V
@@ -51,32 +71,57 @@ Single-agent analysis suffers from **perspective bias** - once an LLM forms an i
 
 The Director synthesizes these perspectives, cross-validates conflicts, and produces a balanced report.
 
-## Features
+## Installation
 
-- **10 Analytics Categories**: Scorecard, Time, Communication, Mistakes, Positives, Gaps, Behavioral, Factual, Action Items, Interviewer Quality
-- **Anti-Hallucination Protocol**: Every metric includes confidence scoring and evidence citation
-- **Multi-Agent Architecture**: 4 parallel analysts prevent single-viewpoint bias
-- **Works Anywhere**: Use with ChatGPT, Claude, Gemini, or any LLM
-
-## Quick Start
-
-### Option 1: Copy-Paste (Any LLM)
-
-1. Open [prompts/analyzer.md](prompts/analyzer.md)
-2. Copy the entire content
-3. Paste your transcript at the end
-4. Send to any LLM (ChatGPT, Claude, Gemini)
-
-### Option 2: Claude Code Skill (Full Multi-Agent)
+### Claude Code / Claude.ai
 
 ```bash
-# Install the skill
-cp -r adapters/claude-code ~/.claude/skills/transcription-analyzer
+# Clone and install
+git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+cp -r transcription-analyzer ~/.claude/skills/
 ```
 
-Then invoke:
+Or via plugin marketplace (when published):
+```bash
+/plugin install transcription-analyzer
 ```
-/transcription-analyzer
+
+### Cursor / VS Code
+
+Copy the skill folder to your workspace:
+```bash
+git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+cp -r transcription-analyzer .cursor/skills/
+# or
+cp -r transcription-analyzer .vscode/skills/
+```
+
+### Gemini CLI
+
+```bash
+git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+# Gemini CLI auto-discovers skills in current directory
+```
+
+### Any Agent Skills-Compatible Tool
+
+The skill follows the [Agent Skills specification](https://agentskills.io/specification). Check your tool's documentation for skill installation.
+
+### Manual (Any LLM)
+
+Copy [references/analyzer-prompt.md](references/analyzer-prompt.md), paste your transcript at the end, and send to any LLM.
+
+## Usage
+
+```
+# In any compatible tool
+analyze my transcript
+
+# Or with file path
+transcription-analyzer /path/to/transcript.md
+
+# Or natural language
+review my mock interview
 ```
 
 ## How It Works
@@ -176,35 +221,26 @@ flowchart LR
 3. **Mark inference** - `[INFERRED]` vs `[EXPLICIT]`
 4. **Aggregate properly** - Overall = weighted average
 
-**Example Output:**
-```markdown
-| Metric | Score | Confidence | Evidence |
-|--------|-------|------------|----------|
-| Overall | 7/10 | HIGH 95% | "solid E6 level" (line 194) |
-| Database | Issue | HIGH 88% | [EXPLICIT] "jumped to PostgreSQL" |
-| Pacing | Good | MEDIUM 65% | [INFERRED] Covered all topics |
-```
+## Directory Structure
 
-## File Structure
+Following the [Agent Skills specification](https://agentskills.io/specification):
 
 ```
 transcription-analyzer/
-├── README.md                    # This file
+├── SKILL.md                     # Required - skill definition with YAML frontmatter
 ├── LICENSE                      # MIT
-├── prompts/
-│   ├── analyzer.md              # Portable prompt (any LLM)
-│   └── confidence-scoring.md    # Methodology reference
-├── examples/
-│   ├── sample_transcript.md     # Test transcript (URL shortener mock)
-│   └── sample_output.md         # Full analysis output example
-└── adapters/
-    └── claude-code/
-        └── SKILL.md             # Multi-agent Claude Code skill
+├── README.md                    # This file
+├── references/                  # Additional docs (loaded on demand)
+│   ├── analyzer-prompt.md       # Portable prompt for any LLM
+│   └── confidence-scoring.md    # Confidence methodology
+└── assets/                      # Static resources
+    ├── sample_transcript.md     # Example input
+    └── sample_output.md         # Example output
 ```
 
 ## Sample Output
 
-From analyzing [examples/sample_transcript.md](examples/sample_transcript.md) (URL shortener system design mock):
+From analyzing [assets/sample_transcript.md](assets/sample_transcript.md) (URL shortener system design mock):
 
 **Scorecard excerpt:**
 | Metric | Score | Confidence | Evidence |
@@ -214,12 +250,12 @@ From analyzing [examples/sample_transcript.md](examples/sample_transcript.md) (U
 | Readiness | 78% | MEDIUM 70% | 1 HIGH mistake, 2 P1 gaps |
 
 **Top positives found:**
-- ⭐ Back-of-envelope calculations [HIGH 98%] - "your calculations were excellent"
-- ⭐ Self-correction ability [HIGH 95%] - "shows good self-awareness"
-- ⭐ Access pattern thinking [HIGH 90%] - "I like how you're thinking about access patterns"
+- Back-of-envelope calculations [HIGH 98%] - "your calculations were excellent"
+- Self-correction ability [HIGH 95%] - "shows good self-awareness"
+- Access pattern thinking [HIGH 90%] - "I like how you're thinking about access patterns"
 
 **Key mistake identified:**
-- 🟠 **Conflated consistent hashing with DB partitioning** [HIGH 92%]
+- **Conflated consistent hashing with DB partitioning** [HIGH 92%]
   - "consistent hashing...typically for caches, not database sharding" (line 190)
 
 **Multi-agent cross-validation:**
@@ -228,40 +264,28 @@ From analyzing [examples/sample_transcript.md](examples/sample_transcript.md) (U
 - Factual Agent verified 2 correct claims, flagged 1 wrong
 - **Synthesis**: Self-correction on PostgreSQL noted as positive recovery pattern
 
-📄 **[View full analysis →](examples/sample_output.md)**
-
-## Extending
-
-### Adding New Adapters
-
-Create `adapters/<tool-name>/` with tool-specific integration:
-
-```
-adapters/
-├── claude-code/    # ✅ Implemented
-├── cursor/         # Planned
-├── aider/          # Planned
-└── continue/       # Planned
-```
-
-### Adding Interview Types
-
-The analyzer auto-detects:
-- System Design
-- Coding
-- Behavioral
-
-To add new types, extend the detection signals in `SKILL.md` Step 4.
+[View full analysis →](assets/sample_output.md)
 
 ## Contributing
 
 Areas for contribution:
 
-- [ ] Cursor adapter
-- [ ] Aider adapter
+- [ ] Additional interview type detection (ML/AI interviews)
 - [ ] Coding interview specific prompts
 - [ ] Behavioral interview deep-dive
+- [ ] Non-English transcript support
 - [ ] Web UI for non-CLI users
+
+## Agent Skills Specification
+
+This skill implements the [Agent Skills open standard](https://agentskills.io):
+
+- **SKILL.md** with required YAML frontmatter (`name`, `description`)
+- **Progressive disclosure** - metadata loaded first, full instructions on activation
+- **Portable** - works across 26+ AI coding tools
+- **Self-contained** - no external dependencies
+
+Learn more: [agentskills.io/specification](https://agentskills.io/specification)
 
 ## License
 
