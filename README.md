@@ -77,7 +77,7 @@ The Director synthesizes these perspectives, cross-validates conflicts, and prod
 
 ```bash
 # Clone and install
-git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+git clone https://github.com/vishnujayvel/transcription-analyzer.git
 cp -r transcription-analyzer ~/.claude/skills/
 ```
 
@@ -90,7 +90,7 @@ Or via plugin marketplace (when published):
 
 Copy the skill folder to your workspace:
 ```bash
-git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+git clone https://github.com/vishnujayvel/transcription-analyzer.git
 cp -r transcription-analyzer .cursor/skills/
 # or
 cp -r transcription-analyzer .vscode/skills/
@@ -99,7 +99,7 @@ cp -r transcription-analyzer .vscode/skills/
 ### Gemini CLI
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/transcription-analyzer.git
+git clone https://github.com/vishnujayvel/transcription-analyzer.git
 # Gemini CLI auto-discovers skills in current directory
 ```
 
