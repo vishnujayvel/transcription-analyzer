@@ -157,22 +157,104 @@ Analyze:
 
 ---
 
-## Step 6: Delegation Decision
+## Step 6: Multi-Perspective Agent Analysis
 
-**Check transcript line count:**
+**IMPORTANT: Use parallel subagents for comprehensive, bias-reduced analysis.**
 
-### IF transcript > 500 lines:
-Delegate to Explore subagent using the Task tool:
+Launch **4 parallel subagents** using the Task tool in a SINGLE message. Each agent analyzes from a different perspective to prevent single-viewpoint blind spots.
+
+### Launch All 4 Agents in Parallel:
 
 ```
-Use Task tool with:
-- subagent_type: "Explore"
-- prompt: [Load prompts/analyzer_subagent.md content + transcript]
-- description: "Analyze mock interview transcript"
+In ONE message, call Task tool 4 times with subagent_type="general-purpose":
+
+Task 1 (Strengths Agent):
+  description: "Find positives in transcript"
+  prompt: |
+    You are the STRENGTHS ANALYST. Your job is to find everything positive.
+
+    Analyze this transcript for:
+    - Explicit praise from interviewer ("good", "nice", "I like that")
+    - Demonstrated competencies
+    - Strong moments and recoveries
+    - Communication wins
+
+    Anti-hallucination: Cite line numbers/quotes. Use HIGH/MEDIUM/LOW/NOT_FOUND confidence.
+
+    Output JSON:
+    {"positives": [{"title": "", "evidence": "", "confidence": "", "category": ""}]}
+
+    TRANSCRIPT:
+    [paste transcript content]
+
+Task 2 (Mistakes Agent):
+  description: "Find mistakes in transcript"
+  prompt: |
+    You are the MISTAKES ANALYST. Your job is to find errors and problems.
+
+    Analyze this transcript for:
+    - Technical errors corrected by interviewer
+    - Conceptual misunderstandings
+    - Communication issues (filler words, long pauses)
+    - Missed opportunities
+
+    Severity levels: CRITICAL (interview-ending), HIGH, MEDIUM, LOW
+
+    Anti-hallucination: Cite line numbers/quotes. Use confidence levels.
+
+    Output JSON:
+    {"mistakes": [{"title": "", "severity": "", "evidence": "", "confidence": "", "category": ""}]}
+
+    TRANSCRIPT:
+    [paste transcript content]
+
+Task 3 (Behavioral Agent):
+  description: "Assess Staff+ signals"
+  prompt: |
+    You are the BEHAVIORAL ANALYST. Your job is to assess leadership signals.
+
+    Analyze this transcript for Staff+ indicators:
+    - Leadership presence (drove vs followed conversation)
+    - Trade-off articulation (made decisions, defended them)
+    - Depth of technical discussion
+    - Response to pushback/challenges
+    - Communication maturity
+
+    Anti-hallucination: Cite evidence. Mark [INFERRED] vs [EXPLICIT].
+
+    Output JSON:
+    {"behavioral": {"leadership": {"rating": "", "evidence": "", "confidence": ""},
+                    "tradeoffs": {"count": 0, "examples": [], "confidence": ""},
+                    "depth_areas": [], "pushback_handling": {"rating": "", "evidence": ""}}}
+
+    TRANSCRIPT:
+    [paste transcript content]
+
+Task 4 (Factual Agent):
+  description: "Verify technical claims"
+  prompt: |
+    You are the FACTUAL VERIFIER. Your job is to check technical accuracy.
+
+    Find all technical claims made by the candidate and classify:
+    - CORRECT: Technically accurate
+    - WRONG: Incorrect (cite the correction from transcript)
+    - NEEDS_VERIFICATION: Cannot determine from transcript alone
+
+    Anti-hallucination: Only mark WRONG if interviewer explicitly corrected it.
+
+    Output JSON:
+    {"claims": [{"claim": "", "classification": "", "correction": "", "confidence": ""}]}
+
+    TRANSCRIPT:
+    [paste transcript content]
 ```
 
-### IF transcript ≤ 500 lines:
-Perform direct analysis using the 10-category framework below.
+### After All 4 Agents Return:
+
+Synthesize their outputs into the unified 10-category report. Cross-validate:
+- If Strengths Agent found a positive but Mistakes Agent found related error → note the recovery
+- If Behavioral Agent found leadership but Factual Agent found errors → assess net impact
+- Resolve conflicts by citing evidence from both perspectives
 
 ---
 
