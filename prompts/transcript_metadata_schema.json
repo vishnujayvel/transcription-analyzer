@@ -1,0 +1,171 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "TranscriptMetadata",
+  "description": "Preprocessing metadata for transcript analysis to prevent speaker confusion",
+  "type": "object",
+  "required": ["version", "session", "participants", "segments", "analysis_context"],
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0"
+    },
+
+    "session": {
+      "type": "object",
+      "description": "Session-level metadata",
+      "required": ["type", "format"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["mock_interview", "real_interview", "coaching", "meeting", "panel", "group_discussion"],
+          "description": "Type of session being analyzed"
+        },
+        "format": {
+          "type": "string",
+          "enum": ["peer_mutual", "one_directional", "panel", "group"],
+          "description": "peer_mutual = roles swap, one_directional = fixed roles"
+        },
+        "duration_seconds": { "type": "integer" },
+        "source_file": { "type": "string" },
+        "timestamp_format": {
+          "type": "string",
+          "enum": ["mm:ss", "hh:mm:ss", "seconds", "iso8601", "unknown"]
+        }
+      }
+    },
+
+    "participants": {
+      "type": "array",
+      "description": "All people in the transcript",
+      "items": {
+        "type": "object",
+        "required": ["id", "labels", "is_primary_subject"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Unique identifier (e.g., 'vishnu', 'anish')"
+          },
+          "labels": {
+            "type": "array",
+            "description": "All names/labels this person appears as in transcript",
+            "items": { "type": "string" }
+          },
+          "is_primary_subject": {
+            "type": "boolean",
+            "description": "TRUE = this is the user we're analyzing FOR"
+          },
+          "background": {
+            "type": "string",
+            "description": "Optional context extracted from transcript"
+          },
+          "identification_evidence": {
+            "type": "string",
+            "description": "Quote or line number that confirms identity"
+          }
+        }
+      }
+    },
+
+    "roles": {
+      "type": "object",
+      "description": "Role definitions for this session type",
+      "properties": {
+        "defined_roles": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "role_id": { "type": "string" },
+              "role_name": { "type": "string" },
+              "gives_feedback": { "type": "boolean" },
+              "receives_feedback": { "type": "boolean" },
+              "asks_questions": { "type": "boolean" },
+              "answers_questions": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+
+    "segments": {
+      "type": "array",
+      "description": "Time-based segments with role assignments",
+      "items": {
+        "type": "object",
+        "required": ["segment_id", "segment_type", "role_assignments"],
+        "properties": {
+          "segment_id": { "type": "integer" },
+          "segment_name": { "type": "string" },
+          "start_timestamp": { "type": "string" },
+          "end_timestamp": { "type": "string" },
+          "start_line": { "type": "integer" },
+          "end_line": { "type": "integer" },
+          "segment_type": {
+            "type": "string",
+            "enum": ["interview", "feedback", "transition", "informal", "qa", "demonstration", "practice"]
+          },
+          "role_assignments": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["participant_id", "role_id"],
+              "properties": {
+                "participant_id": { "type": "string" },
+                "role_id": { "type": "string" }
+              }
+            }
+          },
+          "swap_trigger": {
+            "type": "string",
+            "description": "Quote that triggered role change (if applicable)"
+          }
+        }
+      }
+    },
+
+    "analysis_context": {
+      "type": "object",
+      "description": "Context for the analyzer",
+      "required": ["primary_subject_id", "analysis_goal"],
+      "properties": {
+        "primary_subject_id": {
+          "type": "string",
+          "description": "The participant we're generating analysis FOR"
+        },
+        "analysis_goal": {
+          "type": "string",
+          "enum": ["improve_primary_subject", "evaluate_interviewer", "general_meeting_notes", "coach_effectiveness"]
+        },
+        "feedback_direction_rules": {
+          "type": "array",
+          "description": "Explicit rules for feedback attribution",
+          "items": {
+            "type": "object",
+            "properties": {
+              "segment_id": { "type": "integer" },
+              "feedback_from": { "type": "string" },
+              "feedback_to": { "type": "string" },
+              "include_in_report": {
+                "type": "boolean",
+                "description": "TRUE if this feedback should be included in primary subject's report"
+              }
+            }
+          }
+        }
+      }
+    },
+
+    "confidence": {
+      "type": "object",
+      "description": "Confidence scores for metadata extraction",
+      "properties": {
+        "speaker_identification": { "type": "number", "minimum": 0, "maximum": 1 },
+        "role_swap_detection": { "type": "number", "minimum": 0, "maximum": 1 },
+        "segment_boundaries": { "type": "number", "minimum": 0, "maximum": 1 },
+        "primary_subject_detection": { "type": "number", "minimum": 0, "maximum": 1 },
+        "overall": { "type": "number", "minimum": 0, "maximum": 1 },
+        "notes": { "type": "string" }
+      }
+    }
+  }
+}

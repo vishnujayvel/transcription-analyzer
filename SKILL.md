@@ -1,27 +1,41 @@
 ---
 name: transcription-analyzer
 description: >
-  Analyzes mock interview transcripts using multi-agent architecture with 4 parallel
-  analyst agents (Strengths, Mistakes, Behavioral, Factual) to produce confidence-scored
-  insights across 10 categories. Features anti-hallucination protocol requiring evidence
-  citation for every claim. Use when reviewing mock interviews, wanting interview feedback
-  analysis, or saying "analyze my transcript" or "mock review".
+  Analyzes conversation transcripts using Supervisor Agent architecture. First classifies
+  session type (MockInterview, CoachingSession, GenericMeeting), then routes to specialized
+  analysis workflows. Features anti-hallucination protocol with confidence scoring and
+  evidence citation for every claim. Use when reviewing mock interviews, coaching sessions,
+  meetings, or saying "analyze my transcript".
 license: MIT
 metadata:
   author: vishnu-jayavel
-  version: "1.0"
-  categories: interview-prep, analysis, multi-agent
+  version: "2.0"
+  categories: interview-prep, analysis, supervisor-agent
 ---
 
-# Transcription Analyzer
+# Transcription Analyzer v2.0
 
-Analyze mock interview transcripts with comprehensive, confidence-scored analytics across 10 categories using multi-agent architecture.
+Analyze conversation transcripts with intelligent session type detection and specialized analysis workflows.
 
 ## Triggers
 - "analyze my transcript"
 - "transcription-analyzer"
 - "mock review"
 - "review my transcript"
+- "analyze this meeting"
+- "coaching session review"
+
+---
+
+## Session Types Supported
+
+| Type | Description | Analysis Focus |
+|------|-------------|----------------|
+| `MockInterview.SystemDesign` | System design practice | Technical depth, architecture, trade-offs |
+| `MockInterview.Coding` | Coding interview practice | Algorithm, complexity, edge cases |
+| `MockInterview.Behavioral` | Behavioral interview practice | STAR format, leadership, communication |
+| `CoachingSession` | Mentoring/advice session | Key tips, action items, scripts/patterns |
+| `GenericMeeting` | Any other conversation | Summary, decisions, action items |
 
 ---
 
@@ -44,7 +58,54 @@ Analyze mock interview transcripts with comprehensive, confidence-scored analyti
 3. **Distinguish inference from fact** - Mark clearly: `[INFERRED]` vs `[EXPLICIT]`
 4. **Aggregate confidence** - Overall score = weighted average of components
 
-See [references/confidence-scoring.md](references/confidence-scoring.md) for detailed methodology.
+See [prompts/confidence_scorer.md](prompts/confidence_scorer.md) for detailed methodology.
+
+---
+
+## Phase 0: Transcript Metadata Extraction (NEW)
+
+**CRITICAL: Run this phase BEFORE any content analysis.**
+
+This phase prevents speaker confusion by:
+1. Identifying all speakers and their aliases
+2. Detecting role swaps (e.g., peer mock interviews)
+3. Mapping who gives feedback to whom
+4. Creating `feedback_direction_rules` to filter what's included in the report
+
+See [prompts/phase0_metadata_extraction.md](prompts/phase0_metadata_extraction.md) for the full extraction prompt.
+See [prompts/transcript_metadata_schema.json](prompts/transcript_metadata_schema.json) for the output schema.
+
+### Phase 0 Quick Reference
+
+**When to run:** Always, before Step 3 (Session Type Classification)
+
+**Key output:** `transcript_metadata` JSON with:
+- `participants[]` - All speakers with `is_primary_subject` flag
+- `segments[]` - Time/line-based segments with role assignments
+- `analysis_context.feedback_direction_rules[]` - Which feedback to include
+
+**Role swap detection triggers:**
+- "can you start by introducing yourself" (after questions were answered)
+- "now let me interview you"
+- "your turn to ask me questions"
+- "let's swap roles"
+
+**Example feedback_direction_rules:**
+```json
+{
+  "feedback_direction_rules": [
+    { "segment_id": 2, "feedback_from": "vishnu", "feedback_to": "anish", "include_in_report": false },
+    { "segment_id": 5, "feedback_from": "anish", "feedback_to": "vishnu", "include_in_report": true }
+  ]
+}
+```
+
+### Downstream Agent Rules (MANDATORY)
+
+All analysis phases MUST:
+1. Check segment role_assignments before attributing ANY quote
+2. Only include feedback where `include_in_report == true`
+3. Never attribute feedback FROM primary subject as feedback TO them
 
 ---
 
@@ -54,15 +115,21 @@ See [references/confidence-scoring.md](references/confidence-scoring.md) for det
 Use the provided file path directly.
 
 ### If NO ARGUMENTS:
-Ask user for the transcript file path.
+Use AskUserQuestion to request the file path:
+
+```
+What transcript file would you like me to analyze?
+
+Please provide the full file path (e.g., /path/to/transcript.md)
+```
 
 ---
 
 ## Step 2: File Validation
 
-1. Load the transcript file
+1. Use the Read tool to load the transcript file
 2. Validate the file exists and contains content
-3. Count total lines for delegation decision
+3. Count total lines for delegation decision (>500 lines = use subagent)
 
 ### Error Handling:
 
@@ -75,14 +142,105 @@ Please check the file path is correct.
 **If file is empty:**
 ```
 The transcript file appears to be empty.
-Please provide a transcript with interview content.
+Please provide a transcript with content to analyze.
 ```
 
 ---
 
-## Step 3: Interview Start Detection
+## Step 3: Session Type Classification (SUPERVISOR AGENT)
 
-Scan the transcript for trigger phrases that indicate when the actual interview begins (skip small talk):
+**CRITICAL: Classify session type BEFORE any detailed analysis.**
+
+Follow the classification algorithm in [prompts/supervisor_classifier.md](prompts/supervisor_classifier.md):
+
+### 3.1 Scan for Signal Patterns
+
+Scan the transcript for these signals (case-insensitive):
+
+**MockInterview.SystemDesign signals:**
+- "design a system", "scalability", "database", "load balancer", "API design"
+- "high availability", "microservices", "CAP theorem", "partitioning"
+
+**MockInterview.Coding signals:**
+- "write a function", "time complexity", "algorithm", "test cases", "edge cases"
+- "optimal solution", "brute force", "data structure", "Big O"
+
+**MockInterview.Behavioral signals:**
+- "tell me about a time", "STAR", "leadership", "conflict", "situation"
+- "difficult situation", "disagree with", "mentor"
+
+**CoachingSession signals:**
+- "advice", "tips", "here's what I'd recommend", "you should try"
+- "feedback on your", "let me coach you", "I suggest", "my recommendation"
+
+### 3.2 Calculate Confidence Score
+
+1. Count signal matches per session type
+2. Normalize to percentage (0-100)
+3. Determine confidence level:
+   - >= 70%: HIGH confidence → Route directly
+   - 50-69%: MEDIUM confidence → Suggest confirmation
+   - < 50%: LOW confidence → Require confirmation
+
+### 3.3 User Confirmation (if needed)
+
+If confidence is LOW or multiple types have similar scores, use AskUserQuestion:
+
+```
+**Session Type Classification**
+
+I detected signals for multiple session types. Please confirm which best describes this transcript:
+
+Options:
+- Mock Interview - System Design
+- Mock Interview - Coding
+- Mock Interview - Behavioral
+- Coaching/Mentoring Session
+- General Meeting/Conversation
+
+Detected signals:
+[List top signals found with line numbers]
+```
+
+### 3.4 Output Session Type Badge
+
+Display at the top of every report:
+
+```markdown
+**Session Type:** MockInterview.SystemDesign [Confidence: HIGH 92%]
+```
+or
+```markdown
+**Session Type:** CoachingSession [Confidence: MEDIUM 68%]
+```
+or
+```markdown
+**Session Type:** GenericMeeting [Confidence: LOW - Default]
+```
+
+---
+
+## Step 4: Route to Specialized Analyzer
+
+Based on session type classification, route to the appropriate workflow:
+
+### If MockInterview.*:
+→ Continue to **Step 5: Mock Interview Analysis**
+→ Use [prompts/mock_interview_analyzer.md](prompts/mock_interview_analyzer.md)
+
+### If CoachingSession:
+→ Jump to **Step 10: Coaching Session Analysis**
+→ Use [prompts/coaching_analyzer.md](prompts/coaching_analyzer.md)
+
+### If GenericMeeting:
+→ Jump to **Step 11: Generic Meeting Analysis**
+→ Use [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md)
+
+---
+
+## Step 5: Interview Start Detection (MockInterview only)
+
+Scan the transcript for trigger phrases that indicate when the actual interview begins:
 
 | Trigger Phrase | Context |
 |----------------|---------|
@@ -100,34 +258,27 @@ Scan the transcript for trigger phrases that indicate when the actual interview 
 
 ---
 
-## Step 4: Interview Type Detection
+## Step 6: Mock Interview Subtype Context
 
-Classify the interview type based on content signals:
+Adjust analysis emphasis based on detected subtype:
 
-### System Design Signals
-- "design a system", "scalability", "database schema"
-- "high availability", "load balancer", "microservices"
-- "CAP theorem", "partitioning", "replication"
+### SystemDesign:
+- Emphasize architecture decisions, scalability trade-offs, component design
+- Focus on design patterns and system thinking
 
-### Coding Signals
-- "write a function", "time complexity", "space complexity"
-- "test cases", "edge cases", "optimal solution"
-- "brute force", "algorithm", "data structure"
+### Coding:
+- Emphasize algorithm choice, complexity analysis, edge case handling
+- Focus on code quality signals and optimization discussion
 
-### Behavioral Signals
-- "tell me about a time", "leadership", "conflict"
-- "difficult situation", "disagree with", "mentor"
-- "STAR format", "situation", "action", "result"
-
-**Output:**
-- Interview type with confidence level and evidence
-- If unclear: "Unknown" with NOT_FOUND confidence
+### Behavioral:
+- Emphasize STAR format usage, leadership signals, communication quality
+- Focus on storytelling and impact articulation
 
 ---
 
-## Step 5: Optional Diagram Analysis (System Design Only)
+## Step 7: Optional Diagram Analysis (System Design Only)
 
-**IF interview type is "System Design":**
+**IF interview type is "MockInterview.SystemDesign":**
 
 Ask user if they have an architecture diagram to analyze alongside the transcript.
 
@@ -140,72 +291,22 @@ Analyze:
 - Diagram Quality Score (1-10)
 
 **IF no diagram:**
-Note that no diagram was provided and recommend saving diagrams for future review.
+```
+[Confidence: NOT_FOUND] No diagram provided for analysis.
+Tip: Save diagrams from future interviews for more comprehensive review.
+```
 
 ---
 
-## Step 6: Multi-Perspective Agent Analysis
+## Step 8: 10-Category Mock Interview Analysis
 
-**IMPORTANT: Use parallel agents for comprehensive, bias-reduced analysis.**
+For transcripts over 500 lines, delegate to subagent using Task tool with `subagent_type: "Explore"`.
 
-Launch **4 parallel agents** to analyze from different perspectives. This prevents single-viewpoint blind spots.
-
-### Agent 1: Strengths Analyst
-Find everything positive:
-- Explicit praise from interviewer ("good", "nice", "I like that")
-- Demonstrated competencies
-- Strong moments and recoveries
-- Communication wins
-
-Output: `{"positives": [{"title": "", "evidence": "", "confidence": "", "category": ""}]}`
-
-### Agent 2: Mistakes Analyst
-Find errors and problems:
-- Technical errors corrected by interviewer
-- Conceptual misunderstandings
-- Communication issues (filler words, long pauses)
-- Missed opportunities
-
-Severity levels: CRITICAL (interview-ending), HIGH, MEDIUM, LOW
-
-Output: `{"mistakes": [{"title": "", "severity": "", "evidence": "", "confidence": "", "category": ""}]}`
-
-### Agent 3: Behavioral Analyst
-Assess Staff+ signals:
-- Leadership presence (drove vs followed conversation)
-- Trade-off articulation (made decisions, defended them)
-- Depth of technical discussion
-- Response to pushback/challenges
-- Communication maturity
-
-Output: `{"behavioral": {"leadership": {...}, "tradeoffs": {...}, "depth_areas": [], "pushback_handling": {...}}}`
-
-### Agent 4: Factual Verifier
-Check technical accuracy:
-- CORRECT: Technically accurate
-- WRONG: Incorrect (cite the correction from transcript)
-- NEEDS_VERIFICATION: Cannot determine from transcript alone
-
-Only mark WRONG if interviewer explicitly corrected it.
-
-Output: `{"claims": [{"claim": "", "classification": "", "correction": "", "confidence": ""}]}`
-
-### Synthesis
-
-After all 4 agents return, cross-validate:
-- If Strengths Agent found a positive but Mistakes Agent found related error → note the recovery
-- If Behavioral Agent found leadership but Factual Agent found errors → assess net impact
-- Resolve conflicts by citing evidence from both perspectives
-
----
-
-## Step 7: 10-Category Analysis
-
-For each category, extract insights with confidence scoring and evidence citation.
+Extract insights with confidence scoring and evidence citation for each category:
 
 ### Category 1: Scorecard
 - **Overall performance** (1-10 scale) - Look for explicit feedback
-- **Level assessment** (Junior/Mid/Senior/Staff+) - Look for explicit statements or infer
+- **Level assessment** (E5/E6/E7/Staff+) - Look for explicit statements or infer
 - **Dimensions**: Communication, Technical Depth, Structure, Leadership
 - **Readiness %** = `100 - (P0_gaps × 15) - (P1_gaps × 5) - (CRITICAL_mistakes × 20) - (HIGH_mistakes × 10) - (MEDIUM_mistakes × 3)`
 
@@ -220,17 +321,18 @@ For each category, extract insights with confidence scoring and evidence citatio
 - Clarifying questions asked
 - Course corrections after feedback
 
-### Category 4: Mistakes Identified
-For EACH mistake:
-- Title and description
-- Severity: CRITICAL, HIGH, MEDIUM, LOW
-- Category: Fundamentals, API Design, Patterns, Domain Knowledge, Communication
-- Direct evidence with line number
-
-### Category 5: Things That Went Well
-- Explicit praise
+### Category 4: Things That Went Well
+**IMPORTANT: Show positives BEFORE mistakes (ADHD-friendly ordering)**
+- Explicit praise from interviewer
 - Demonstrated strengths
 - Approaches that worked
+
+### Category 5: Mistakes Identified
+For EACH mistake:
+- Title and description
+- Severity: 🔴 CRITICAL, 🟠 HIGH, 🟡 MEDIUM, ⚪ LOW
+- Category: Fundamentals, API Design, Patterns, Domain Knowledge, Communication
+- Direct evidence with line number
 
 ### Category 6: Knowledge Gaps
 For EACH gap:
@@ -247,12 +349,12 @@ For EACH gap:
 ### Category 8: Factual Claims
 For EACH technical claim:
 - The claim
-- Classification: Correct, Wrong, Needs Verification
+- Classification: ✅ Correct, ❌ Wrong, ❓ Needs Verification
 - Correction if wrong
 
 ### Category 9: Action Items
 - Explicit recommendations from interviewer
-- Resources recommended
+- Resources recommended (books, sites, problems)
 
 ### Category 10: Interviewer Quality
 - Feedback actionability (1-5 scale)
@@ -261,40 +363,247 @@ For EACH technical claim:
 
 ---
 
-## Step 8: Output Formatting
-
-**IMPORTANT: Show positives BEFORE mistakes (motivation-friendly ordering)**
+## Step 9: Mock Interview Output Formatting
 
 Structure the report as:
-1. Metadata (file, type, confidence)
-2. Scorecard
-3. Time Breakdown
-4. Communication Signals
-5. Things That Went Well (before mistakes!)
-6. Mistakes Identified
-7. Knowledge Gaps
-8. Behavioral Assessment
-9. Factual Accuracy Check
-10. Action Items
-11. Interviewer Quality
-12. Confidence Summary
 
-Include tables with evidence citations and confidence levels for each item.
+```markdown
+## Mock Interview Analysis
+
+**File:** [filename]
+**Session Type:** MockInterview.[subtype] [Confidence: X%]
+**Date Analyzed:** [timestamp]
 
 ---
 
-## Step 9: JSON Summary
+### 1. Scorecard
+[Overall score, level assessment, dimensional scores, readiness %]
 
-After the markdown report, output a structured JSON summary with all categories for programmatic consumption.
+### 2. Time Breakdown
+[Duration, phase timings]
+
+### 3. Communication Signals
+[Talk ratio, filler words, clarifying questions]
+
+### 4. ⭐ Things That Went Well
+[Positives with evidence - BEFORE mistakes]
+
+### 5. Mistakes Identified
+[Severity-coded mistakes with evidence]
+
+### 6. Knowledge Gaps
+[Priority-coded gaps]
+
+### 7. Behavioral Assessment
+[Staff+ signals]
+
+### 8. Factual Claims
+[Verification status]
+
+### 9. Action Items
+[Recommendations and resources]
+
+### 10. Interviewer Quality
+[Actionability assessment]
 
 ---
 
-## Assets
+### Confidence Summary
+[Overall confidence, by-category breakdown, data quality notes]
+```
 
-- [assets/sample_transcript.md](assets/sample_transcript.md) - Example transcript for testing
-- [assets/sample_output.md](assets/sample_output.md) - Example analysis output
+After the markdown report, output a JSON summary for programmatic consumption.
 
-## References
+→ **END of MockInterview workflow**
 
-- [references/analyzer-prompt.md](references/analyzer-prompt.md) - Portable prompt for any LLM
-- [references/confidence-scoring.md](references/confidence-scoring.md) - Confidence methodology
+---
+
+## Step 10: Coaching Session Analysis
+
+**ONLY execute this step if session type is CoachingSession**
+
+Use [prompts/coaching_analyzer.md](prompts/coaching_analyzer.md) for detailed extraction.
+
+### 6-Category Extraction:
+
+#### Category 1: Session Context
+- Identify coach/mentor and mentee names
+- Extract session topic(s) discussed
+
+#### Category 2: Key Advice/Tips
+- List all explicit recommendations from coach
+- Categorize by domain: communication, technical, career, behavioral, other
+- Include direct quotes with line numbers
+
+#### Category 3: Scripts/Patterns
+- Extract reusable phrases or frameworks taught
+- Format as quotable, ready-to-use text
+- Note context for when to use each script
+
+#### Category 4: Action Items
+- Explicit tasks assigned by coach
+- Implicit tasks (things to practice, review)
+- Prioritize by urgency: 🔴 High, 🟡 Medium, ⚪ Low
+
+#### Category 5: Questions Raised
+- Topics needing further exploration
+- Unanswered questions from session
+
+#### Category 6: Session Quality
+- Actionability score (1-5)
+- Concrete examples count
+
+### Coaching Output Format:
+
+```markdown
+## Coaching Session Analysis
+
+**File:** [filename]
+**Session Type:** CoachingSession [Confidence: X%]
+**Coach:** [name] | **Mentee:** [name]
+**Topics:** [topic1], [topic2]
+
+---
+
+### 1. Key Advice & Tips
+[Categorized by domain with direct quotes]
+
+### 2. Scripts & Patterns
+[Quotable text with usage context]
+
+### 3. Action Items
+[Explicit and implicit tasks with urgency]
+
+### 4. Questions Raised
+[Topics needing exploration]
+
+### 5. Session Quality
+[Actionability score, examples count]
+
+---
+
+### Confidence Summary
+```
+
+→ **END of CoachingSession workflow**
+
+---
+
+## Step 11: Generic Meeting Analysis
+
+**ONLY execute this step if session type is GenericMeeting**
+
+Use [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md) for detailed extraction.
+
+### 6-Category Extraction:
+
+#### Category 1: Meeting Context
+- Identify participants (if detectable)
+- Identify meeting purpose/topic
+
+#### Category 2: Summary
+- 3-5 sentence executive summary
+- Most important points discussed
+
+#### Category 3: Decisions Made
+- All explicit decisions reached
+- Owner for each decision (if mentioned)
+
+#### Category 4: Action Items
+- All tasks assigned
+- Owner and deadline (if mentioned)
+
+#### Category 5: Open Questions
+- Unresolved topics
+- Topics needing follow-up
+
+#### Category 6: Key Quotes
+- Memorable or important statements
+- Speaker attribution and line number
+
+### Meeting Output Format:
+
+```markdown
+## Meeting Analysis
+
+**File:** [filename]
+**Session Type:** GenericMeeting [Confidence: X%]
+**Participants:** [list]
+**Purpose:** [detected purpose]
+
+---
+
+### 1. Executive Summary
+[3-5 sentence summary]
+
+### 2. Key Decisions
+[Decisions with owners]
+
+### 3. Action Items
+[Tasks with owners and deadlines]
+
+### 4. Open Questions
+[Unresolved topics needing follow-up]
+
+### 5. Key Quotes
+[Memorable statements with attribution]
+
+---
+
+### Confidence Summary
+```
+
+→ **END of GenericMeeting workflow**
+
+---
+
+## Subagent Delegation (Large Transcripts)
+
+For transcripts exceeding 500 lines, use the Task tool to delegate analysis:
+
+```
+Task tool with subagent_type: "Explore"
+Prompt: [Include appropriate analyzer prompt + transcript content]
+```
+
+Validate JSON response structure before displaying results.
+
+If subagent fails:
+1. Attempt direct analysis with truncation warning
+2. Analyze available portion
+3. Note incomplete analysis in output
+
+---
+
+## Portability Constraints
+
+This skill MUST remain portable and dependency-free:
+
+**PROHIBITED references:**
+- `mcp__mem0__*` - No memory service
+- `mcp__obsidian__*` - No note-taking service
+- `/Users/vishnu/` - No personal paths
+- `study plan` - No integration with other skills
+- `gotcha` - No gotcha tracking
+
+**ALLOWED tools only:**
+- `Read` - File reading
+- `AskUserQuestion` - User interaction
+- `Task` - Subagent delegation (with `subagent_type: "Explore"`)
+
+---
+
+## Examples
+
+- [examples/sample_transcript.md](examples/sample_transcript.md) - Example mock interview transcript
+- [examples/sample_output.md](examples/sample_output.md) - Example analysis output
+
+## Prompts
+
+- [prompts/phase0_metadata_extraction.md](prompts/phase0_metadata_extraction.md) - **Phase 0:** Speaker/role extraction (run first!)
+- [prompts/transcript_metadata_schema.json](prompts/transcript_metadata_schema.json) - JSON schema for metadata output
+- [prompts/supervisor_classifier.md](prompts/supervisor_classifier.md) - Session type classification
+- [prompts/mock_interview_analyzer.md](prompts/mock_interview_analyzer.md) - Mock interview analysis
+- [prompts/coaching_analyzer.md](prompts/coaching_analyzer.md) - Coaching session analysis
+- [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md) - Generic meeting analysis
+- [prompts/confidence_scorer.md](prompts/confidence_scorer.md) - Confidence methodology
