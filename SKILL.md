@@ -24,6 +24,10 @@ Analyze conversation transcripts with intelligent session type detection and spe
 - "review my transcript"
 - "analyze this meeting"
 - "coaching session review"
+- "analyze topic flow"
+- "topic flow analysis"
+- "how did we deviate?"
+- "show me our tangents"
 
 ---
 
@@ -36,6 +40,7 @@ Analyze conversation transcripts with intelligent session type detection and spe
 | `MockInterview.Behavioral` | Behavioral interview practice | STAR format, leadership, communication |
 | `CoachingSession` | Mentoring/advice session | Key tips, action items, scripts/patterns |
 | `GenericMeeting` | Any other conversation | Summary, decisions, action items |
+| `TopicFlowAnalysis` | Long multi-person discussions | Topic hierarchy, deviations, filler words, visualizations |
 
 ---
 
@@ -235,6 +240,10 @@ Based on session type classification, route to the appropriate workflow:
 ### If GenericMeeting:
 → Jump to **Step 11: Generic Meeting Analysis**
 → Use [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md)
+
+### If TopicFlowAnalysis:
+→ Jump to **Step 12: Topic Flow Analysis**
+→ Use [prompts/topic_flow_orchestrator.md](prompts/topic_flow_orchestrator.md)
 
 ---
 
@@ -557,6 +566,70 @@ Use [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md) for detailed extr
 
 ---
 
+## Step 12: Topic Flow Analysis
+
+**ONLY execute this step if session type is TopicFlowAnalysis**
+
+Use [prompts/topic_flow_orchestrator.md](prompts/topic_flow_orchestrator.md) for the full workflow.
+
+### Three-Phase Map-Reduce Approach:
+
+#### Phase 1: Map (Chunk Analysis)
+- Split transcript into 300-line chunks with 50-line overlap
+- For each chunk: extract topics, speakers, timestamps, deviations, filler words
+- Output intermediate JSON per chunk
+
+#### Phase 2: Reduce (Merge & Reconcile)
+- Merge topic hierarchies across chunks
+- Deduplicate and reconcile overlapping segments
+- Build global topic tree with parent-child relationships
+
+#### Phase 3: Synthesize (Visualizations & Insights)
+- Generate Topic Hierarchy (tree structure)
+- Generate Sankey diagram data (topic flow)
+- Generate Timeline visualization data
+- Identify deviation patterns and tangent analysis
+- Aggregate filler word statistics by speaker
+- Produce actionable insights
+
+### Topic Flow Output Format:
+
+```markdown
+## Topic Flow Analysis
+
+**File:** [filename]
+**Session Type:** TopicFlowAnalysis [Confidence: X%]
+**Duration:** [total time] | **Speakers:** [count]
+
+---
+
+### 1. Topic Hierarchy
+[Tree structure of main topics → subtopics]
+
+### 2. Flow Visualization (Sankey Data)
+[JSON for Sankey diagram: topic transitions with weights]
+
+### 3. Timeline
+[Chronological topic progression with timestamps]
+
+### 4. Deviations & Tangents
+[Where conversation deviated from main topics, duration, return points]
+
+### 5. Filler Word Analysis
+[Per-speaker breakdown: um, uh, like, you know, basically, etc.]
+
+### 6. Insights
+[Patterns, recommendations, conversation quality metrics]
+
+---
+
+### Confidence Summary
+```
+
+→ **END of TopicFlowAnalysis workflow**
+
+---
+
 ## Subagent Delegation (Large Transcripts)
 
 For transcripts exceeding 500 lines, use the Task tool to delegate analysis:
@@ -606,4 +679,5 @@ This skill MUST remain portable and dependency-free:
 - [prompts/mock_interview_analyzer.md](prompts/mock_interview_analyzer.md) - Mock interview analysis
 - [prompts/coaching_analyzer.md](prompts/coaching_analyzer.md) - Coaching session analysis
 - [prompts/meeting_analyzer.md](prompts/meeting_analyzer.md) - Generic meeting analysis
+- [prompts/topic_flow_orchestrator.md](prompts/topic_flow_orchestrator.md) - Topic flow analysis (Map-Reduce)
 - [prompts/confidence_scorer.md](prompts/confidence_scorer.md) - Confidence methodology

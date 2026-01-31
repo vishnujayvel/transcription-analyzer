@@ -22,6 +22,15 @@
 - Real-time transcript processing during conversations
 - Automatic study plan or task creation in external systems
 
+### Goals (v2.1 - TopicFlowAnalysis)
+- Add TopicFlowAnalysis mode for long multi-person conversations
+- Implement three-phase Map-Reduce architecture for token optimization
+- Extract hierarchical topics (themes → sub-topics) with time tracking
+- Detect three deviation types: unrelated jumps, rabbit holes, depth spirals
+- Track who causes deviations and who brings conversation back on track
+- Analyze filler words as confidence signals per topic
+- Generate Mermaid visualizations (Sankey + Timeline)
+
 ---
 
 ## Architecture
@@ -747,6 +756,173 @@ transcription-analyzer/
 
 ---
 
+## Topic Flow Analysis Architecture (v2.1)
+
+### Three-Phase Map-Reduce Architecture
+
+```mermaid
+graph TB
+    subgraph Phase1["Phase 1: Skeleton Extraction"]
+        Input[Transcript] --> Extract[Extract Timestamps/Speakers]
+        Extract --> Keywords[Detect Topic Keywords]
+        Keywords --> Boundaries[Identify Break Points]
+    end
+
+    subgraph Phase2["Phase 2: Chunked Analysis (Parallel)"]
+        Boundaries --> Split[Split into 15-20min chunks]
+        Split --> Chunk1[Chunk Agent 1]
+        Split --> Chunk2[Chunk Agent 2]
+        Split --> ChunkN[Chunk Agent N]
+        Chunk1 --> Topics1[Topics + Deviations + Fillers]
+        Chunk2 --> Topics2[Topics + Deviations + Fillers]
+        ChunkN --> TopicsN[Topics + Deviations + Fillers]
+    end
+
+    subgraph Phase3["Phase 3: Synthesis"]
+        Topics1 --> Merge[Merge Topic Trees]
+        Topics2 --> Merge
+        TopicsN --> Merge
+        Merge --> Dedupe[Dedupe Overlaps]
+        Dedupe --> CrossChunk[Cross-Chunk Patterns]
+        CrossChunk --> Sankey[Generate Sankey]
+        CrossChunk --> Timeline[Generate Timeline]
+        CrossChunk --> Insights[Generate Insights]
+    end
+```
+
+### Topic Flow Analyzer Component
+
+#### prompts/topic_flow_orchestrator.md
+
+**Responsibility**: Orchestrate three-phase analysis for topic flow
+
+**Contract**:
+
+```typescript
+interface TopicFlowInput {
+  transcript: string;
+  participants?: string[];  // Optional, will detect if not provided
+  mainTopic?: string;       // Optional, will infer from content
+}
+
+interface TopicFlowAnalysisJSON {
+  metadata: {
+    sessionType: "TopicFlowAnalysis";
+    duration: string;
+    participants: string[];
+    mainTheme: string;
+    totalLines: number;
+    analysisTimestamp: string;
+  };
+  topicHierarchy: ThemeNode[];
+  deviations: DeviationEvent[];
+  fillerAnalysis: FillerAnalysis;
+  visualizations: {
+    sankey: string;     // Mermaid sankey code
+    timeline: string;   // Mermaid timeline code
+  };
+  insights: string[];
+  confidenceSummary: ConfidenceSummary;
+}
+
+interface ThemeNode {
+  theme: string;
+  totalTime: string;
+  confidence: number;
+  subtopics: SubtopicNode[];
+  revisitCount: number;
+  fillerDensity: number;
+}
+
+interface SubtopicNode {
+  name: string;
+  time: string;
+  chunks: string[];
+  keyTerms: string[];
+  confidence: number;
+}
+
+interface DeviationEvent {
+  id: string;
+  type: "unrelated_jump" | "rabbit_hole" | "depth_spiral";
+  severity: "high" | "medium" | "low" | "intentional";
+  fromTopic: string;
+  toTopic: string;
+  timestamp: string;
+  duration: string;
+  returned: boolean;
+  returnedBy?: string;
+  returnTimestamp?: string;
+  returnPhrase?: string;
+  speakersInvolved: string[];
+}
+
+interface FillerAnalysis {
+  byTopic: TopicConfidence[];
+  bySpeaker: SpeakerFillerProfile[];
+  insights: string[];
+}
+
+interface TopicConfidence {
+  topic: string;
+  fillerDensity: number;
+  confidence: number;
+  signal: "strong" | "moderate" | "shaky" | "review";
+}
+
+interface SpeakerFillerProfile {
+  speaker: string;
+  totalWords: number;
+  totalFillers: number;
+  density: string;
+  primaryFiller: string;
+  mostUncertainTopic: string;
+  mostConfidentTopic: string;
+  pattern?: string;
+}
+```
+
+### Filler Word Patterns
+
+```typescript
+const FILLER_PATTERNS = {
+  classic: ["um", "uh", "er", "ah", "hmm"],
+  hedge: ["like", "you know", "basically", "essentially", "kind of", "sort of", "i guess", "maybe"],
+  stalling: ["so basically what i'm trying to say", "let me think", "how do i put this", "what's the word"],
+  confidence_killer: ["i'm not sure but", "i think maybe", "don't quote me", "if i recall"]
+};
+```
+
+### Deviation Detection Logic
+
+```typescript
+// Unrelated Jump: Cosine similarity < 0.3
+function detectUnrelatedJump(segmentA: Segment, segmentB: Segment): boolean {
+  const similarity = cosineSimilarity(
+    embed(segmentA.theme + segmentA.keyTerms),
+    embed(segmentB.theme + segmentB.keyTerms)
+  );
+  return similarity < 0.3;
+}
+
+// Rabbit Hole: Doesn't return to original topic
+function detectRabbitHole(topicStack: Topic[], currentTime: Time): DeviationEvent[] {
+  return topicStack
+    .filter(t => timeSince(t.leftAt) > 15 && !t.returned)
+    .map(t => ({ type: "rabbit_hole", ... }));
+}
+
+// Depth Spiral: Time > 2x average on one subtopic
+function detectDepthSpiral(theme: Theme): DeviationEvent[] {
+  const avgTime = theme.totalTime / theme.subtopics.length;
+  return theme.subtopics
+    .filter(s => s.time > avgTime * 2)
+    .map(s => ({ type: "depth_spiral", ... }));
+}
+```
+
+---
+
 ## Portability Constraints
 
 The following MUST NOT appear in any skill file:
@@ -804,6 +980,51 @@ All outputs include a session type badge:
 ---
 ### Confidence Summary
 ```
+
+### Topic Flow Analysis Report Structure
+
+```markdown
+## Topic Flow Analysis
+
+**File:** [filename]
+**Session Type:** TopicFlowAnalysis [Confidence: X]
+**Duration:** Xh Ym
+**Participants:** [list]
+**Main Theme:** [detected or provided]
+
+---
+
+### 1. Topic Hierarchy
+[Hierarchical topic tree with time spent and confidence per topic]
+
+### 2. Topic Flow (Sankey Diagram)
+[Mermaid sankey showing topic transitions with time-spent as edge width]
+
+### 3. Timeline View
+[Mermaid timeline showing chronological progression with deviation markers]
+
+### 4. Deviation Report
+| # | Type | From → To | Duration | Severity | Returned By |
+[Table of all detected deviations]
+
+**Summary:** X deviations, Y min off-topic, primary deviator: [name], primary returner: [name]
+
+### 5. Filler Word Analysis
+**Per-Topic Confidence:**
+[Heatmap showing confidence levels based on filler density]
+
+**Per-Speaker Profile:**
+[Filler stats per speaker with most/least confident topics]
+
+### 6. Insights & Recommendations
+[LLM-generated actionable insights]
+
+---
+### JSON Export
+[Full structured data]
+```
+
+---
 
 ### Coaching Session Report Structure
 

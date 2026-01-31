@@ -23,6 +23,7 @@ The **Transcription Analyzer** is an open-source, standalone Claude Code skill t
 | `MockInterview.Behavioral` | Behavioral interview practice | STAR format, leadership signals, communication |
 | `CoachingSession` | Mentoring/advice session | Key tips, action items, scripts/patterns |
 | `GenericMeeting` | Any other conversation | Summary, decisions, action items |
+| `TopicFlowAnalysis` | Long multi-person discussions | Topic hierarchy, deviations, filler words, visualizations |
 
 ---
 
@@ -351,6 +352,59 @@ The **Transcription Analyzer** is an open-source, standalone Claude Code skill t
 ##### Category 6: Key Quotes
 11. WHEN extracting quotes THEN the Transcription Analyzer SHALL identify memorable or important statements.
 12. WHEN extracting quotes THEN the Transcription Analyzer SHALL include speaker attribution and line number.
+
+---
+
+### Requirement 13: Topic Flow Analysis Mode
+
+**Objective:** As a user with a long multi-person conversation, I want to analyze topic flow, deviations, and conversational dynamics, so that I can understand how effectively we stayed on track and who contributed to focus vs. tangents.
+
+#### Acceptance Criteria
+
+##### Input Handling
+1. WHEN TopicFlowAnalysis mode is invoked THEN the Transcription Analyzer SHALL accept transcript file path.
+2. WHEN loading transcript THEN the Transcription Analyzer SHALL detect speakers using layered approach: inline patterns first, header metadata second, interactive prompt third.
+3. WHEN speaker detection is ambiguous THEN the Transcription Analyzer SHALL ask user to confirm participants list.
+4. WHEN participants are provided externally (e.g., "Participants: Vishnu, Amy, Victor") THEN the Transcription Analyzer SHALL trust that metadata even if transcript shows different labels.
+
+##### Token Optimization (Map-Reduce Architecture)
+5. WHEN analyzing transcripts over 500 lines THEN the Transcription Analyzer SHALL use three-phase Map-Reduce architecture.
+6. WHEN executing Phase 1 (Skeleton) THEN the Transcription Analyzer SHALL extract timestamps, speaker changes, and topic keywords using lightweight processing.
+7. WHEN executing Phase 2 (Chunked Analysis) THEN the Transcription Analyzer SHALL split transcript into 15-20 minute chunks with 2-minute overlap.
+8. WHEN executing Phase 2 THEN the Transcription Analyzer SHALL spawn parallel chunk agents via Task tool for concurrent processing.
+9. WHEN executing Phase 3 (Synthesis) THEN the Transcription Analyzer SHALL merge chunk results into global topic tree and deduplicate overlapping sections.
+
+##### Topic Hierarchy Detection
+10. WHEN extracting topics THEN the Transcription Analyzer SHALL produce two-level hierarchy: Themes (major topics) containing Sub-topics (specific concepts).
+11. WHEN detecting topic boundaries THEN the Transcription Analyzer SHALL scan for signals: "let's move on to", "next question", "okay so", "anyway", "going back to".
+12. WHEN extracting themes from chunks THEN the Transcription Analyzer SHALL output: theme name, sub-topics list, key terms, time spent, confidence score.
+13. WHEN merging themes across chunks THEN the Transcription Analyzer SHALL use fuzzy matching to cluster similar theme names and pick canonical name.
+
+##### Deviation Classification
+14. WHEN classifying deviations THEN the Transcription Analyzer SHALL detect three types: Unrelated Jump, Rabbit Hole, Depth Spiral.
+15. WHEN detecting Unrelated Jump THEN the Transcription Analyzer SHALL flag when cosine similarity between adjacent topics < 0.3.
+16. WHEN detecting Rabbit Hole THEN the Transcription Analyzer SHALL flag when topic exploration exceeds threshold AND conversation doesn't return to original topic.
+17. WHEN detecting Depth Spiral THEN the Transcription Analyzer SHALL flag when time spent on sub-topic exceeds 2x average while other sub-topics are skipped.
+18. WHEN a deviation is detected THEN the Transcription Analyzer SHALL assign severity: 🔴 High, 🟠 Medium, 🟡 Low, ⚪ Intentional.
+19. WHEN conversation returns to original topic THEN the Transcription Analyzer SHALL track who initiated the return ("returned_by") with timestamp and trigger phrase.
+
+##### Filler Word Analysis
+20. WHEN analyzing filler words THEN the Transcription Analyzer SHALL detect four categories: classic fillers (um, uh), hedge words (like, basically), stalling phrases, confidence killers.
+21. WHEN calculating filler density THEN the Transcription Analyzer SHALL compute: total_fillers / total_words per speaker per topic.
+22. WHEN correlating fillers with topics THEN the Transcription Analyzer SHALL produce topic confidence score: high filler density = low confidence signal.
+23. WHEN outputting filler analysis THEN the Transcription Analyzer SHALL show per-speaker profile with primary filler type, most/least confident topics.
+
+##### Visualization Generation
+24. WHEN generating visualizations THEN the Transcription Analyzer SHALL produce Mermaid Sankey diagram showing topic flow with time-spent as edge width.
+25. WHEN generating visualizations THEN the Transcription Analyzer SHALL produce Mermaid Timeline diagram showing chronological topic progression with deviation markers.
+26. WHEN generating Sankey THEN the Transcription Analyzer SHALL color tangent nodes differently from main topic nodes.
+27. WHEN generating Timeline THEN the Transcription Analyzer SHALL use emoji indicators for confidence level per topic segment.
+
+##### Output Format
+28. WHEN generating output THEN the Transcription Analyzer SHALL produce markdown report with sections: Topic Hierarchy, Sankey Diagram, Timeline View, Deviation Report, Filler Word Analysis, Insights.
+29. WHEN generating deviation report THEN the Transcription Analyzer SHALL include table with: type, from→to topic, duration, severity, returned_by.
+30. WHEN generating insights THEN the Transcription Analyzer SHALL identify: knowledge gap signals (high filler topics), positive signals (confident topics), speaker patterns.
+31. WHEN generating output THEN the Transcription Analyzer SHALL produce JSON export with full structured data for programmatic consumption.
 
 ---
 

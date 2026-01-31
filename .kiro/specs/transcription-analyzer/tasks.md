@@ -235,6 +235,132 @@ This plan implements the Transcription Analyzer v2.0 skill with **Supervisor Age
 
 ---
 
+---
+
+## v2.1 Tasks: Topic Flow Analysis Mode
+
+- [x] 10. Add TopicFlowAnalysis to session type routing
+- [x] 10.1 Update SKILL.md with TopicFlowAnalysis triggers and routing
+  - Add trigger phrases: "analyze topic flow", "topic flow analysis", "how did we deviate?", "show me our tangents"
+  - Add TopicFlowAnalysis to session type detection signals
+  - Route to topic_flow_orchestrator.md when detected
+  - _Requirements: R13.1, R13.2, R13.3, R13.4_
+
+- [ ] 10.2 Update supervisor_classifier.md with TopicFlowAnalysis signals
+  - Add signal patterns for long discussions: multiple speakers, extended duration markers
+  - TopicFlowAnalysis should be explicitly requested (not auto-detected)
+  - _Requirements: R13.1_
+
+---
+
+- [x] 11. Implement Phase 1: Skeleton Extraction
+- [x] 11.1 Create prompts/topic_flow_orchestrator.md
+  - Define three-phase orchestration flow
+  - Phase 1: Lightweight extraction of timestamps, speakers, keywords
+  - Implement speaker detection: inline patterns → header metadata → ask user
+  - Detect topic boundary signals: "let's move on", "next question", "anyway", "going back to"
+  - _Requirements: R13.2, R13.3, R13.4, R13.5, R13.6, R13.10, R13.11_
+
+- [ ] 11.2 Implement chunking logic
+  - Split transcript into 15-20 minute chunks
+  - Add 2-minute overlap between chunks
+  - Calculate chunk boundaries based on timestamps
+  - _Requirements: R13.7, R13.8_
+
+---
+
+- [x] 12. Implement Phase 2: Parallel Chunk Analysis
+- [x] 12.1 Create prompts/topic_extractor.md
+  - Extract two-level hierarchy: themes → sub-topics
+  - Output per chunk: theme name, sub-topics, key terms, time spent, confidence
+  - Include entry/exit topics for stitching
+  - _Requirements: R13.10, R13.12_
+
+- [x] 12.2 Create prompts/deviation_classifier.md
+  - Detect unrelated jumps (semantic similarity < 0.3)
+  - Detect rabbit holes (exploration without return)
+  - Detect depth spirals (time > 2x average)
+  - Track return events with speaker attribution
+  - Assign severity: high, medium, low, intentional
+  - _Requirements: R13.14, R13.15, R13.16, R13.17, R13.18, R13.19_
+
+- [x] 12.3 Create prompts/filler_word_analyzer.md
+  - Detect four filler categories: classic, hedge, stalling, confidence killers
+  - Calculate filler density per speaker per topic
+  - Compute topic confidence scores from filler density
+  - _Requirements: R13.20, R13.21, R13.22, R13.23_
+
+- [ ] 12.4 Implement parallel agent spawning
+  - Spawn chunk agents via Task tool in single message (true parallelism)
+  - Use Haiku model for chunk agents (speed + cost optimization)
+  - Collect results from all agents
+  - _Requirements: R13.8_
+
+---
+
+- [x] 13. Implement Phase 3: Synthesis
+- [x] 13.1 Create prompts/topic_flow_synthesizer.md
+  - Merge chunk results into global topic tree
+  - Deduplicate overlapping sections (2-min overlap handling)
+  - Fuzzy match themes across chunks, pick canonical names
+  - Cross-chunk pattern detection: "returned to X multiple times"
+  - _Requirements: R13.9, R13.13_
+
+- [ ] 13.2 Implement Mermaid Sankey generation
+  - Generate sankey-beta diagram from topic flow
+  - Edge width = time spent on topic
+  - Color tangent nodes differently
+  - _Requirements: R13.24, R13.26_
+
+- [ ] 13.3 Implement Mermaid Timeline generation
+  - Generate timeline diagram with chronological flow
+  - Mark deviation events with warning indicators
+  - Color by confidence level (emoji indicators)
+  - _Requirements: R13.25, R13.27_
+
+- [ ] 13.4 Implement insight generation
+  - Knowledge gap signals (high filler topics)
+  - Positive signals (confident topics)
+  - Speaker patterns
+  - Learning signals (filler decrease over time)
+  - _Requirements: R13.30_
+
+---
+
+- [ ] 14. Create output formatting and JSON export
+- [ ] 14.1 Create TopicFlowAnalysis markdown report template
+  - Section 1: Topic Hierarchy (tree with time and confidence)
+  - Section 2: Topic Flow Sankey
+  - Section 3: Timeline View
+  - Section 4: Deviation Report (table)
+  - Section 5: Filler Word Analysis (heatmap + profiles)
+  - Section 6: Insights & Recommendations
+  - _Requirements: R13.28, R13.29_
+
+- [ ] 14.2 Define JSON export schema
+  - Full structured data for programmatic consumption
+  - Match TypeScript interfaces from design doc
+  - _Requirements: R13.31_
+
+---
+
+- [ ] 15. Test with real transcript
+- [ ] 15.1 Test with Database Party transcript
+  - File: /Users/vishnu/Documents/obsibrain/obsibrain-vault/5-notes/Database party with Amy and Victor - transcription.md
+  - Verify speaker detection (Vishnu, Amy/Them, Victor)
+  - Verify topic extraction accuracy
+  - Verify deviation detection
+  - Verify filler word analysis
+  - Verify visualization generation
+  - _Requirements: All R13.*_
+
+- [ ] 15.2 Generate sample output
+  - Create examples/sample_topic_flow_output.md
+  - Document expected structure for future reference
+  - _Requirements: NFR-3_
+
+---
+
 ## Requirements Coverage Matrix
 
 | Requirement | Task(s) |
@@ -256,6 +382,7 @@ This plan implements the Transcription Analyzer v2.0 skill with **Supervisor Age
 | NFR-2: Reliability | 8.2 |
 | NFR-3: Maintainability | 1.1, 1.2 |
 | NFR-4: Compatibility | 1.1, 9.3 |
+| R13: Topic Flow Analysis | 10.1, 10.2, 11.1, 11.2, 12.1, 12.2, 12.3, 12.4, 13.1, 13.2, 13.3, 13.4, 14.1, 14.2, 15.1, 15.2 |
 
 ---
 
